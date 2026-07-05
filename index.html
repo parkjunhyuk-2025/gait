@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>보행 안정성 분석 — Physical AI Gait Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;700;900&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+<style>
+  :root{
+    --bg:#0A101F;
+    --bg-grid:#0D1526;
+    --panel:#111B2E;
+    --panel-2:#152140;
+    --border:#213155;
+    --border-soft:#1A2743;
+    --text:#E8ECF6;
+    --text-dim:#8CA0C4;
+    --text-faint:#54628A;
+    --teal:#35D0BA;
+    --teal-dim:rgba(53,208,186,.13);
+    --amber:#FFB454;
+    --amber-dim:rgba(255,180,84,.13);
+    --red:#FF5C6C;
+    --red-dim:rgba(255,92,108,.14);
+    --blue:#6C9BFF;
+    --font-disp:'Space Grotesk',sans-serif;
+    --font-kr:'Noto Sans KR',sans-serif;
+    --font-mono:'JetBrains Mono',monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(ellipse 900px 500px at 15% -10%, rgba(53,208,186,.08), transparent 60%),
+      radial-gradient(ellipse 700px 500px at 100% 0%, rgba(108,155,255,.07), transparent 55%),
+      var(--bg);
+    background-attachment:fixed;
+    color:var(--text);
+    font-family:var(--font-kr);
+    line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+  }
+  .material-symbols-outlined{font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 22;vertical-align:middle;font-size:20px;}
+  .wrap{max-width:1180px;margin:0 auto;padding:28px 20px 60px;}
+
+  /* ---------- topbar ---------- */
+  .topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-bottom:22px;border-bottom:1px solid var(--border-soft);margin-bottom:34px;flex-wrap:wrap;}
+  .brand{display:flex;align-items:center;gap:10px;}
+  .brand-mark{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--teal),var(--blue));display:flex;align-items:center;justify-content:center;color:#06121a;font-family:var(--font-disp);font-weight:700;font-size:15px;flex:none;}
+  .brand-text{font-family:var(--font-mono);font-size:12px;letter-spacing:.12em;color:var(--text-dim);text-transform:uppercase;}
+  .brand-text b{color:var(--text);font-weight:600;}
+  .status-pill{display:flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:12px;letter-spacing:.03em;padding:7px 14px 7px 10px;border-radius:100px;border:1px solid var(--border);background:var(--panel);color:var(--text-dim);}
+  .status-dot{width:8px;height:8px;border-radius:50%;background:var(--text-faint);flex:none;}
+  .status-pill.live .status-dot{background:var(--teal);box-shadow:0 0 0 3px var(--teal-dim);animation:pulse 1.6s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.45;}}
+
+  /* ---------- hero ---------- */
+  .hero{margin-bottom:38px;}
+  .eyebrow{font-family:var(--font-mono);font-size:12px;letter-spacing:.16em;color:var(--teal);text-transform:uppercase;margin-bottom:14px;display:flex;align-items:center;gap:10px;}
+  .eyebrow::before{content:'';width:22px;height:1px;background:var(--teal);display:inline-block;}
+  h1{font-family:var(--font-disp);font-weight:700;font-size:clamp(28px,4.4vw,44px);line-height:1.12;margin:0 0 16px;letter-spacing:-.01em;}
+  h1 .accent{color:var(--teal);}
+  .hero p{max-width:640px;color:var(--text-dim);font-size:15.5px;margin:0;}
+
+  /* ---------- dashboard grid ---------- */
+  .dashboard{display:grid;grid-template-columns:1.35fr 1fr;gap:18px;align-items:start;}
+  @media (max-width:900px){.dashboard{grid-template-columns:1fr;}}
+
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:18px;}
+  .card-title{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+  .card-title h3{font-family:var(--font-disp);font-size:14px;font-weight:600;margin:0;letter-spacing:.01em;color:var(--text);}
+  .card-title .tag{font-family:var(--font-mono);font-size:10.5px;color:var(--text-faint);letter-spacing:.06em;text-transform:uppercase;}
+
+  /* video panel */
+  .video-shell{position:relative;width:100%;aspect-ratio:4/3;border-radius:12px;overflow:hidden;background:#050a14;border:1px solid var(--border-soft);}
+  .video-shell video, .video-shell canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1);}
+  .video-shell video{background:#050a14;}
+  .video-placeholder{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--text-faint);font-size:13px;text-align:center;padding:20px;transition:opacity .3s;}
+  .video-placeholder .material-symbols-outlined{font-size:38px;opacity:.6;}
+  .video-shell.active .video-placeholder{opacity:0;pointer-events:none;}
+  .video-controls{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:14px;}
+  .btn{font-family:var(--font-kr);font-weight:500;font-size:13.5px;border:1px solid var(--border);background:var(--panel-2);color:var(--text);padding:9px 16px;border-radius:9px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .15s;}
+  .btn:hover{border-color:var(--teal);color:var(--teal);}
+  .btn.primary{background:var(--teal);border-color:var(--teal);color:#06121a;font-weight:700;}
+  .btn.primary:hover{filter:brightness(1.08);color:#06121a;}
+  .btn.stop{background:var(--red-dim);border-color:var(--red);color:var(--red);}
+  .calib{display:flex;align-items:center;gap:8px;margin-left:auto;font-size:12.5px;color:var(--text-dim);flex-wrap:wrap;}
+  .calib input{width:64px;background:var(--bg-grid);border:1px solid var(--border);color:var(--text);border-radius:7px;padding:6px 8px;font-family:var(--font-mono);font-size:12.5px;}
+  .calib input:focus{outline:none;border-color:var(--teal);}
+  .calib label{color:var(--text-faint);font-size:11px;}
+
+  /* metrics column */
+  .metrics-panel{display:flex;flex-direction:column;gap:16px;}
+  .gauge-wrap{display:flex;flex-direction:column;align-items:center;}
+  .gauge-value{font-family:var(--font-mono);font-size:34px;font-weight:700;margin-top:-38px;color:var(--text);}
+  .gauge-value span{font-size:14px;color:var(--text-faint);font-weight:400;margin-left:3px;}
+  .gauge-caption{font-size:11.5px;color:var(--text-faint);margin-top:2px;text-align:center;}
+  .risk-badge{margin-top:10px;font-family:var(--font-mono);font-weight:700;font-size:13px;letter-spacing:.05em;padding:8px 18px;border-radius:100px;display:flex;align-items:center;gap:7px;}
+  .risk-badge.safe{background:var(--teal-dim);color:var(--teal);border:1px solid rgba(53,208,186,.4);}
+  .risk-badge.caution{background:var(--amber-dim);color:var(--amber);border:1px solid rgba(255,180,84,.4);}
+  .risk-badge.danger{background:var(--red-dim);color:var(--red);border:1px solid rgba(255,92,108,.4);}
+  .risk-badge.idle{background:var(--panel-2);color:var(--text-faint);border:1px solid var(--border);}
+
+  .readout-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .readout{background:var(--bg-grid);border:1px solid var(--border-soft);border-radius:10px;padding:10px 12px;}
+  .readout .rl{font-size:10.5px;color:var(--text-faint);letter-spacing:.05em;text-transform:uppercase;font-family:var(--font-mono);}
+  .readout .rv{font-family:var(--font-mono);font-size:19px;font-weight:600;margin-top:3px;color:var(--text);}
+  .readout .rv span{font-size:11px;color:var(--text-faint);font-weight:400;}
+
+  .spark-card canvas{width:100%;height:96px;display:block;border-radius:8px;}
+
+  /* physai section */
+  .section-head{margin:52px 0 20px;}
+  .section-head .eyebrow{margin-bottom:10px;}
+  .section-head h2{font-family:var(--font-disp);font-size:clamp(21px,2.6vw,27px);font-weight:600;margin:0 0 8px;}
+  .section-head p{color:var(--text-dim);font-size:14.5px;max-width:680px;margin:0;}
+
+  .diagram-row{display:grid;grid-template-columns:1fr 1.15fr;gap:18px;margin-bottom:18px;}
+  @media (max-width:900px){.diagram-row{grid-template-columns:1fr;}}
+  .diagram-card svg{width:100%;height:auto;display:block;}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:12px;font-size:12px;color:var(--text-dim);}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .legend i{width:10px;height:10px;border-radius:3px;display:inline-block;}
+
+  .robot-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
+  @media (max-width:900px){.robot-grid{grid-template-columns:1fr;}}
+  .robot-card{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:18px;}
+  .robot-icon{width:40px;height:40px;border-radius:10px;background:var(--panel-2);border:1px solid var(--border-soft);display:flex;align-items:center;justify-content:center;margin-bottom:14px;color:var(--teal);}
+  .robot-card h4{font-family:var(--font-disp);font-size:15.5px;margin:0 0 3px;}
+  .robot-card .maker{font-family:var(--font-mono);font-size:10.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;display:block;}
+  .robot-card p{font-size:13px;color:var(--text-dim);margin:0;}
+  .robot-card .tagrow{margin-top:12px;display:flex;gap:6px;flex-wrap:wrap;}
+  .robot-card .tagrow span{font-family:var(--font-mono);font-size:10px;color:var(--text-faint);border:1px solid var(--border-soft);border-radius:6px;padding:3px 7px;}
+
+  /* disclaimer + refs */
+  .disclaimer{margin-top:48px;background:var(--panel);border:1px solid var(--border);border-left:3px solid var(--amber);border-radius:12px;padding:16px 18px;font-size:13px;color:var(--text-dim);display:flex;gap:12px;}
+  .disclaimer .material-symbols-outlined{color:var(--amber);flex:none;}
+
+  footer.refs{margin-top:40px;border-top:1px solid var(--border-soft);padding-top:22px;}
+  footer.refs h5{font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--text-faint);margin:0 0 12px;}
+  footer.refs ol{margin:0;padding-left:20px;color:var(--text-faint);font-size:12px;line-height:1.9;}
+  footer.refs ol li{margin-bottom:6px;}
+  /* 참고문헌 링크 스타일 정의 */
+  footer.refs ol li a{color:var(--text-dim);text-decoration:none;border-bottom:1px dashed var(--border);transition:all .15s ease;}
+  footer.refs ol li a:hover{color:var(--teal);border-bottom-color:var(--teal);}
+  footer.refs .note{margin-top:14px;font-size:11.5px;color:var(--text-faint);font-style:italic;}
+
+  footer.copyright{margin-top:24px;text-align:center;font-family:var(--font-mono);font-size:11.5px;letter-spacing:.04em;color:var(--teal);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-mark">Φ</div>
+      <div class="brand-text">Physical AI <b>Gait Stability Lab</b></div>
+    </div>
+    <div class="status-pill" id="statusPill">
+      <span class="status-dot" id="statusDot"></span>
+      <span id="statusText">대기 중 · 카메라를 시작하세요</span>
+    </div>
+  </div>
+
+  <section class="hero">
+    <div class="eyebrow">ZMP · XcoM · MARGIN OF STABILITY</div>
+    <h1>사람의 걸음에서 <span class="accent">로봇의 균형</span>까지</h1>
+    <p>웹캠으로 실시간 자세를 추정해 신체 분절 무게중심(COM)과 확장무게중심(XcoM, Hof et al. 2005)을 계산하고,
+    지지기저면(BOS) 대비 안정성 여유(Margin of Stability)를 통해 낙상 위험을 예측합니다.
+    같은 원리가 인간형 로봇의 ZMP 기반 균형 제어(Vukobratović &amp; Borovac, 2004)에도 적용됩니다.</p>
+  </section>
+
+  <section class="dashboard">
+    <!-- LEFT: camera + overlay -->
+    <div class="card">
+      <div class="card-title">
+        <h3>실시간 자세 추적</h3>
+        <span class="tag">BlazePose · Bazarevsky et al. 2020</span>
+      </div>
+      <div class="video-shell" id="videoShell">
+        <video id="video" playsinline muted></video>
+        <canvas id="overlay"></canvas>
+        <div class="video-placeholder">
+          <span class="material-symbols-outlined">videocam</span>
+          <span>카메라를 시작하면 골격·무게중심·안정성 지표가<br>실시간으로 표시됩니다</span>
+        </div>
+      </div>
+      <div class="video-controls">
+        <button class="btn primary" id="btnStart"><span class="material-symbols-outlined">play_arrow</span>시작</button>
+        <button class="btn stop" id="btnStop" style="display:none;"><span class="material-symbols-outlined">stop</span>정지</button>
+        <button class="btn" id="btnReset"><span class="material-symbols-outlined">restart_alt</span>초기화</button>
+        <div class="calib">
+          <label>신장(cm)</label>
+          <input type="number" id="heightInput" value="170" min="100" max="220">
+          <label>다리 길이(cm)</label>
+          <input type="number" id="legInput" value="82.5" min="50" max="120">
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: metrics -->
+    <div class="metrics-panel">
+      <div class="card gauge-card">
+        <div class="card-title">
+          <h3>안정성 게이지 (MoS)</h3>
+          <span class="tag">Hof 2005</span>
+        </div>
+        <div class="gauge-wrap">
+          <svg viewBox="0 0 240 140" width="220">
+            <path d="M 20,120 A 100,100 0 0 1 70,33.40" fill="none" stroke="#FF5C6C" stroke-width="18" stroke-linecap="butt"/>
+            <path d="M 70,33.40 A 100,100 0 0 1 145.88,23.41" fill="none" stroke="#FFB454" stroke-width="18" stroke-linecap="butt"/>
+            <path d="M 145.88,23.41 A 100,100 0 0 1 220,120" fill="none" stroke="#35D0BA" stroke-width="18" stroke-linecap="butt"/>
+            <g id="needleGroup" transform="rotate(0 120 120)">
+              <line x1="120" y1="120" x2="120" y2="34" stroke="#E8ECF6" stroke-width="3" stroke-linecap="round"/>
+            </g>
+            <circle cx="120" cy="120" r="7" fill="#E8ECF6"/>
+          </svg>
+          <div class="gauge-value" id="mosValue">—<span>cm</span></div>
+          <div class="gauge-caption">XcoM → 지지기저면 경계까지 거리</div>
+          <div class="risk-badge idle" id="riskBadge"><span class="material-symbols-outlined" style="font-size:16px;">radio_button_unchecked</span><span id="riskText">대기중</span></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><h3>실시간 지표</h3><span class="tag">per frame</span></div>
+        <div class="readout-grid">
+          <div class="readout"><div class="rl">COM 속도</div><div class="rv" id="velOut">0.0<span>cm/s</span></div></div>
+          <div class="readout"><div class="rl">XcoM 편차</div><div class="rv" id="xcomOut">0.0<span>cm</span></div></div>
+          <div class="readout"><div class="rl">고유진동수 ω₀</div><div class="rv" id="omegaOut">0.00<span>rad/s</span></div></div>
+          <div class="readout"><div class="rl">BOS 폭</div><div class="rv" id="bosOut">0.0<span>cm</span></div></div>
+        </div>
+      </div>
+
+      <div class="card spark-card">
+        <div class="card-title"><h3>MoS 추이</h3><span class="tag">최근 8초</span></div>
+        <canvas id="sparkline"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <!-- PHYSICAL AI SECTION -->
+  <div class="section-head">
+    <div class="eyebrow">FROM BIOMECHANICS TO PHYSICAL AI</div>
+    <h2>ZMP 개념과 인간형 로봇의 균형 제어</h2>
+    <p>인간의 보행 안정성 지표(XcoM·MoS)와 인간형 로봇의 영점모멘트점(ZMP) 제어는 같은 문제 — "지지기저면 안에서 무게중심을 어떻게 유지할 것인가" — 를 서로 다른 방식으로 풀어낸 결과입니다.</p>
+  </div>
+
+  <div class="diagram-row">
+    <div class="card diagram-card">
+      <div class="card-title"><h3>지지기저면(BOS)과 안정성 여유</h3><span class="tag">개념도</span></div>
+      <svg viewBox="0 0 320 220">
+        <ellipse cx="118" cy="188" rx="26" ry="11" fill="#17213A" stroke="#213155"/>
+        <ellipse cx="202" cy="188" rx="26" ry="11" fill="#17213A" stroke="#213155"/>
+        <path d="M 88,188 Q 160,205 232,188" fill="none" stroke="#54628A" stroke-width="1.4" stroke-dasharray="3 4"/>
+        <line x1="160" y1="40" x2="160" y2="140" stroke="#213155" stroke-width="10" stroke-linecap="round"/>
+        <circle cx="160" cy="40" r="15" fill="#17213A" stroke="#213155" stroke-width="2"/>
+        <line x1="145" y1="70" x2="120" y2="105" stroke="#213155" stroke-width="8" stroke-linecap="round"/>
+        <line x1="175" y1="70" x2="200" y2="105" stroke="#213155" stroke-width="8" stroke-linecap="round"/>
+        <line x1="148" y1="140" x2="130" y2="182" stroke="#213155" stroke-width="9" stroke-linecap="round"/>
+        <line x1="172" y1="140" x2="190" y2="182" stroke="#213155" stroke-width="9" stroke-linecap="round"/>
+        <circle cx="152" cy="112" r="6.5" fill="#6C9BFF"/>
+        <text x="152" y="98" fill="#6C9BFF" font-size="11" font-family="JetBrains Mono" text-anchor="middle">COM</text>
+        <circle cx="176" cy="112" r="6.5" fill="#35D0BA"/>
+        <text x="188" y="130" fill="#35D0BA" font-size="11" font-family="JetBrains Mono" text-anchor="start">XcoM</text>
+        <line x1="152" y1="112" x2="176" y2="112" stroke="#8CA0C4" stroke-width="1.5" stroke-dasharray="2 3"/>
+        <line x1="176" y1="112" x2="228" y2="112" stroke="#FFB454" stroke-width="1.5"/>
+        <text x="230" y="115" fill="#FFB454" font-size="10.5" font-family="JetBrains Mono">MoS</text>
+        <line x1="90" y1="60" x2="90" y2="188" stroke="#54628A" stroke-width="1" stroke-dasharray="2 3"/>
+        <line x1="228" y1="60" x2="228" y2="188" stroke="#54628A" stroke-width="1" stroke-dasharray="2 3"/>
+        <text x="159" y="55" fill="#54628A" font-size="9.5" font-family="Noto Sans KR" text-anchor="middle">지지기저면(BOS) 경계</text>
+      </svg>
+      <div class="legend">
+        <span><i style="background:#6C9BFF"></i>무게중심 COM</span>
+        <span><i style="background:#35D0BA"></i>확장무게중심 XcoM</span>
+        <span><i style="background:#FFB454"></i>안정성 여유 MoS</span>
+      </div>
+    </div>
+
+    <div class="card diagram-card">
+      <div class="card-title"><h3>계산 원리</h3><span class="tag">수식</span></div>
+      <div style="font-family:var(--font-mono);font-size:13px;line-height:2.3;color:var(--text-dim);">
+        <div>ω₀ = √(g / l) <span style="color:var(--text-faint)">— 도립진자 고유진동수, l = 다리 길이</span></div>
+        <div>XcoM = COM + v<sub>COM</sub> / ω₀ <span style="color:var(--text-faint)">— Hof et al., 2005</span></div>
+        <div>MoS = min(XcoM − BOS<sub>min</sub>, BOS<sub>max</sub> − XcoM)</div>
+        <div style="margin-top:10px;color:var(--text-faint);font-family:var(--font-kr);font-size:12.5px;line-height:1.7;">
+        MoS &gt; 0 이면 XcoM이 지지기저면 안에 있어 안정, MoS &lt; 0 이면 경계를 벗어나
+        수정 스텝(교정 발디딤)이 필요한 상태로 해석합니다. 로봇 제어에서는 같은 논리를
+        ZMP가 지지다각형 경계를 벗어나지 않도록 하는 문제로 치환해 풉니다
+        (Vukobratović &amp; Borovac, 2004).
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="robot-grid">
+    <div class="robot-card">
+      <div class="robot-icon"><span class="material-symbols-outlined">precision_manufacturing</span></div>
+      <span class="maker">Tesla · Hardware</span>
+      <h4>Optimus</h4>
+      <p>자율주행 스택에서 파생된 시각 기반 신경망으로 걸음과 균형을 학습시키는 방식을 취한다.
+      사람의 시연 영상을 모사하는 학습 구조라, 손으로 짠 제어 규칙보다 새로운 동작에 대한 적응이
+      빠르다는 점이 특징이다. 경사면에서의 균형 유지와 안정적인 보행 속도 확보가 세대를 거치며
+      계속 개선되고 있는 핵심 과제다.</p>
+      <div class="tagrow"><span>VISION-BASED</span><span>공장 실증 단계</span></div>
+    </div>
+    <div class="robot-card">
+      <div class="robot-icon"><span class="material-symbols-outlined">directions_run</span></div>
+      <span class="maker">Boston Dynamics · Dynamics</span>
+      <h4>Atlas</h4>
+      <p>유압식에서 완전 전동식 구동계로 전환하며 동적 균형 회복 능력에 집중해온 연구용 플랫폼이다.
+      외부 충격을 받아도 넘어지지 않고 자세를 되찾거나, 달리기·점프 같은 동적 동작 중에도 지지기저면
+      기반 균형을 실시간으로 재계산하는 능력이 강점으로 꼽힌다.</p>
+      <div class="tagrow"><span>ELECTRIC ACTUATION</span><span>연구 플랫폼</span></div>
+    </div>
+    <div class="robot-card">
+      <div class="robot-icon"><span class="material-symbols-outlined">memory</span></div>
+      <span class="maker">NVIDIA · Foundation Model</span>
+      <h4>GR00T N1</h4>
+      <p>로봇 하드웨어가 아니라 인간형 로봇을 위한 개방형 "두뇌" 모델이다. 느리고 신중한 계획을 담당하는
+      비전-언어 모듈과, 빠르고 반사적인 동작 실행 모듈을 결합한 이중 구조를 취하는데, 이는 대뇌의 의식적
+      계획과 척수 반사가 함께 걸음을 만드는 인간 보행 제어 방식과 개념적으로 닮아 있다.</p>
+      <div class="tagrow"><span>DUAL-SYSTEM VLA</span><span>오픈 파운데이션 모델</span></div>
+    </div>
+  </div>
+
+  <div class="disclaimer">
+    <span class="material-symbols-outlined">info</span>
+    <div>
+    이 웹앱은 교육·연구 목적의 프로토타입입니다. 
+    </div>
+  </div>
+
+  <footer class="refs">
+    <h5>참고문헌</h5>
+    <ol>
+      <li>Vukobratović, M., &amp; Borovac, B. (2004). <a href="https://www.cs.cmu.edu/~cga/legs/vukobratovic.pdf" target="_blank" rel="noopener noreferrer">Zero-moment point — thirty five years of its life</a>. <i>International Journal of Humanoid Robotics</i>, 1(1), 157–173. [1.1]</li>
+      <li>Dempster, W. T. (1955). <a href="https://apps.dtic.mil/sti/tr/pdf/AD0087892.pdf" target="_blank" rel="noopener noreferrer">Space requirements of the seated operator</a>. WADC Technical Report 55-159. Wright-Patterson Air Force Base.</li>
+      <li>de Leva, P. (1996). <a href="https://doi.org/10.1016/0021-9290(95)00178-6" target="_blank" rel="noopener noreferrer">Adjustments to Zatsiorsky-Seluyanov's segment inertia parameters</a>. <i>Journal of Biomechanics</i>, 29(9), 1223–1230.</li>
+      <li>Hof, A. L., Gazendam, M. G. J., &amp; Sinke, W. E. (2005). <a href="https://doi.org/10.1016/j.jbiomech.2004.03.025" target="_blank" rel="noopener noreferrer">The condition for dynamic stability</a>. <i>Journal of Biomechanics</i>, 38(1), 1–8.</li>
+      <li>Podsiadlo, D., &amp; Richardson, S. (1991). <a href="https://doi.org/10.1111/j.1532-5415.1991.tb01616.x" target="_blank" rel="noopener noreferrer">The timed "Up &amp; Go": a test of basic functional mobility for frail elderly persons</a>. <i>Journal of the American Geriatrics Society</i>, 39(2), 142–148.</li>
+      <li>Berg, K., Wood-Dauphinee, S., Williams, J. I., &amp; Maki, B. (1992). <a href="https://pubmed.ncbi.nlm.nih.gov/1468055/" target="_blank" rel="noopener noreferrer">Measuring balance in the elderly: validation of an instrument</a>. <i>Canadian Journal of Public Health</i>, 83(Suppl 2), S7–S11.</li>
+      <li>Lugade, V., Lin, V., &amp; Chou, L.-S. (2011). <a href="https://doi.org/10.1016/j.gaitpost.2010.12.013" target="_blank" rel="noopener noreferrer">Center of mass and base of support interaction during gait</a>. <i>Gait &amp; Posture</i>, 33(3), 406–411.</li>
+      <li>Bazarevsky, V., Grishchenko, I., Raveendran, K., Zhu, T., Zhang, F., &amp; Grundmann, M. (2020). <a href="https://arxiv.org/pdf/2006.10204.pdf" target="_blank" rel="noopener noreferrer">BlazePose: On-device real-time body pose tracking</a>. arXiv:2006.10204.</li>
+    </ol>
+    <div class="note">링크를 클릭하면 원문이 보입니다.</div>
+  </footer>
+
+  <footer class="copyright">Copyright 2026. 박준혁. All rights reserved.</footer>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+<script>
+(function(){
+  'use strict';
+
+  /* ---------------- DOM ---------------- */
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('overlay');
+  const ctx = canvas.getContext('2d');
+  const videoShell = document.getElementById('videoShell');
+  const btnStart = document.getElementById('btnStart');
+  const btnStop = document.getElementById('btnStop');
+  const btnReset = document.getElementById('btnReset');
+  const heightInput = document.getElementById('heightInput');
+  const legInput = document.getElementById('legInput');
+  const statusPill = document.getElementById('statusPill');
+  const statusDot = document.getElementById('statusDot');
+  const statusText = document.getElementById('statusText');
+  const needleGroup = document.getElementById('needleGroup');
+  const mosValue = document.getElementById('mosValue');
+  const riskBadge = document.getElementById('riskBadge');
+  const riskText = document.getElementById('riskText');
+  const velOut = document.getElementById('velOut');
+  const xcomOut = document.getElementById('xcomOut');
+  const omegaOut = document.getElementById('omegaOut');
+  const bosOut = document.getElementById('bosOut');
+  const spark = document.getElementById('sparkline');
+  const sctx = spark.getContext('2d');
+
+  /* ---------------- constants ---------------- */
+  const G_CM = 980;              // 중력가속도 (cm/s^2)
+  const V_MIN = -8, V_MAX = 16;  // 게이지 범위 (cm)
+  const A_MIN = -90, A_MAX = 90; // 게이지 각도 범위 (deg)
+  const TH_DANGER = 0;           // MoS < 0 : 위험
+  const TH_CAUTION = 6;          // 0 <= MoS < 6 : 주의, 그 이상 : 안정
+  const SMOOTH = 0.35;           // 지수이동평균 계수
+  const HISTORY_LEN = 220;       // 스파크라인 샘플 수 (약 8초 @ 30fps 근사)
+
+  // de Leva (1996) 남성 평균 분절 질량비 및 근위단 기준 무게중심 위치 비율
+  const SEG = {
+    head:   {w:0.0694},
+    trunk:  {w:0.4346, t:0.4486}, // shoulderMid -> hipMid
+    uArm:   {w:0.0271, t:0.5772}, // shoulder -> elbow
+    fArm:   {w:0.0162, t:0.4574}, // elbow -> wrist
+    hand:   {w:0.0061},
+    thigh:  {w:0.1416, t:0.4095}, // hip -> knee
+    shank:  {w:0.0433, t:0.4459}, // knee -> ankle
+    foot:   {w:0.0137}
+  };
+
+  // BlazePose landmark indices
+  const IDX = {nose:0,lSh:11,rSh:12,lEl:13,rEl:14,lWr:15,rWr:16,lHip:23,rHip:24,
+               lKnee:25,rKnee:26,lAnk:27,rAnk:28,lHeel:29,rHeel:30,lToe:31,rToe:32};
+
+  const CONNECTIONS = [
+    [11,12],[11,13],[13,15],[12,14],[14,16],
+    [11,23],[12,24],[23,24],
+    [23,25],[25,27],[27,29],[29,31],[27,31],
+    [24,26],[26,28],[28,30],[30,32],[28,32]
+  ];
+
+  /* ---------------- state ---------------- */
+  let stream = null;
+  let running = false;
+  let pose = null;
+  let prevComCm = null, prevT = null;
+  let smMoS = null, smVel = 0;
+  let history = [];
+  let legLengthCm = parseFloat(legInput.value) || 82.5;
+
+  heightInput.addEventListener('input', () => {
+    const h = parseFloat(heightInput.value);
+    if (h > 0) { legInput.value = (h * 0.485).toFixed(1); legLengthCm = h * 0.485; }
+  });
+  legInput.addEventListener('input', () => {
+    const l = parseFloat(legInput.value);
+    if (l > 0) legLengthCm = l;
+  });
+
+  /* ---------------- pose setup ---------------- */
+  function initPose(){
+    if (pose) return;
+    pose = new Pose({locateFile:(f)=>`https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}`});
+    pose.setOptions({
+      modelComplexity:1,
+      smoothLandmarks:true,
+      enableSegmentation:false,
+      minDetectionConfidence:0.55,
+      minTrackingConfidence:0.55
+    });
+    pose.onResults(onResults);
+  }
+
+  async function frameLoop(){
+    if (!running) return;
+    try{ await pose.send({image:video}); }catch(e){ /* skip frame on transient error */ }
+    requestAnimationFrame(frameLoop);
+  }
+
+  async function startCamera(){
+    try{
+      initPose();
+      stream = await navigator.mediaDevices.getUserMedia({video:{width:640,height:480,facingMode:'user'},audio:false});
+      video.srcObject = stream;
+      await video.play();
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+      running = true;
+      videoShell.classList.add('active');
+      btnStart.style.display='none'; btnStop.style.display='inline-flex';
+      statusPill.classList.add('live'); statusText.textContent='분석 중 · 실시간 추적';
+      requestAnimationFrame(frameLoop);
+    }catch(err){
+      statusText.textContent='카메라 접근 실패: 권한을 확인하세요';
+      console.error(err);
+    }
+  }
+
+  function stopCamera(){
+    running = false;
+    if (stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
+    videoShell.classList.remove('active');
+    btnStart.style.display='inline-flex'; btnStop.style.display='none';
+    statusPill.classList.remove('live'); statusText.textContent='대기 중 · 카메라를 시작하세요';
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+  }
+
+  function resetSession(){
+    prevComCm=null; prevT=null; smMoS=null; smVel=0; history=[];
+    drawSparkline();
+    mosValue.innerHTML='—<span>cm</span>';
+    velOut.innerHTML='0.0<span>cm/s</span>';
+    xcomOut.innerHTML='0.0<span>cm</span>';
+    bosOut.innerHTML='0.0<span>cm</span>';
+    setNeedle(0);
+    setRisk('idle','대기중');
+  }
+
+  btnStart.addEventListener('click', startCamera);
+  btnStop.addEventListener('click', stopCamera);
+  btnReset.addEventListener('click', resetSession);
+
+  /* ---------------- geometry helpers ---------------- */
+  const mid = (a,b)=>({x:(a.x+b.x)/2,y:(a.y+b.y)/2});
+  const lerp = (a,b,t)=>({x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t});
+  const dist = (a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+
+  function computeCOM(lm,w,h){
+    const P = i => ({x:lm[i].x*w, y:lm[i].y*h});
+    const nose=P(IDX.nose), lSh=P(IDX.lSh), rSh=P(IDX.rSh), lEl=P(IDX.lEl), rEl=P(IDX.rEl),
+          lWr=P(IDX.lWr), rWr=P(IDX.rWr), lHip=P(IDX.lHip), rHip=P(IDX.rHip),
+          lKnee=P(IDX.lKnee), rKnee=P(IDX.rKnee), lAnk=P(IDX.lAnk), rAnk=P(IDX.rAnk),
+          lHeel=P(IDX.lHeel), rHeel=P(IDX.rHeel), lToe=P(IDX.lToe), rToe=P(IDX.rToe);
+
+    const shMid = mid(lSh,rSh), hipMid = mid(lHip,rHip);
+    const segs = [
+      [nose, SEG.head.w],
+      [lerp(shMid,hipMid,SEG.trunk.t), SEG.trunk.w],
+      [lerp(lSh,lEl,SEG.uArm.t), SEG.uArm.w], [lerp(rSh,rEl,SEG.uArm.t), SEG.uArm.w],
+      [lerp(lEl,lWr,SEG.fArm.t), SEG.fArm.w], [lerp(rEl,rWr,SEG.fArm.t), SEG.fArm.w],
+      [lWr, SEG.hand.w], [rWr, SEG.hand.w],
+      [lerp(lHip,lKnee,SEG.thigh.t), SEG.thigh.w], [lerp(rHip,rKnee,SEG.thigh.t), SEG.thigh.w],
+      [lerp(lKnee,lAnk,SEG.shank.t), SEG.shank.w], [lerp(rKnee,rAnk,SEG.shank.t), SEG.shank.w],
+      [mid(lHeel,lToe), SEG.foot.w], [mid(rHeel,rToe), SEG.foot.w]
+    ];
+    let cx=0,cy=0; segs.forEach(([p,w2])=>{cx+=p.x*w2; cy+=p.y*w2;});
+    const com = {x:cx,y:cy};
+
+    const legPx = (dist(lHip,lAnk)+dist(rHip,rAnk))/2;
+    const bosXs = [lHeel.x,lToe.x,rHeel.x,rToe.x];
+    const bosMin = Math.min(...bosXs), bosMax = Math.max(...bosXs);
+
+    return {com, legPx, bosMin, bosMax, lSh,rSh,lEl,rEl,lWr,rWr,lHip,rHip,lKnee,rKnee,lAnk,rAnk,lHeel,rHeel,lToe,rToe,nose};
+  }
+
+  /* ---------------- drawing ---------------- */
+  function drawSkeleton(pts,w,h){
+    ctx.clearRect(0,0,w,h);
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(108,155,255,0.85)';
+    CONNECTIONS.forEach(([a,b])=>{
+      const pa = pts.raw[a], pb = pts.raw[b];
+      ctx.beginPath(); ctx.moveTo(pa.x*w,pa.y*h); ctx.lineTo(pb.x*w,pb.y*h); ctx.stroke();
+    });
+    ctx.fillStyle = '#E8ECF6';
+    for (const i of [11,12,13,14,15,16,23,24,25,26,27,28,29,30,31,32]){
+      const p = pts.raw[i];
+      ctx.beginPath(); ctx.arc(p.x*w,p.y*h,3.2,0,Math.PI*2); ctx.fill();
+    }
+  }
+
+  function drawMarkers(com,xcom,bosMin,bosMax,h){
+    // BOS 경계선
+    ctx.strokeStyle='rgba(255,180,84,0.55)'; ctx.setLineDash([4,4]); ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(bosMin,h*0.02); ctx.lineTo(bosMin,h*0.98); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(bosMax,h*0.02); ctx.lineTo(bosMax,h*0.98); ctx.stroke();
+    ctx.setLineDash([]);
+    // COM
+    ctx.fillStyle='#6C9BFF';
+    ctx.beginPath(); ctx.arc(com.x,com.y,7,0,Math.PI*2); ctx.fill();
+    // XcoM
+    ctx.fillStyle='#35D0BA';
+    ctx.beginPath(); ctx.arc(xcom.x,com.y,7,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle='rgba(232,236,246,0.6)'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(com.x,com.y); ctx.lineTo(xcom.x,com.y); ctx.stroke();
+  }
+
+  function setNeedle(value){
+    const clamped = Math.max(V_MIN, Math.min(V_MAX, value));
+    const angle = A_MIN + (clamped - V_MIN)/(V_MAX - V_MIN) * (A_MAX - A_MIN);
+    needleGroup.setAttribute('transform', `rotate(${angle.toFixed(1)} 120 120)`);
+    mosValue.innerHTML = `${value.toFixed(1)}<span>cm</span>`;
+  }
+
+  function setRisk(kind,label){
+    riskBadge.className = 'risk-badge ' + kind;
+    riskText.textContent = label;
+    const iconMap = {idle:'radio_button_unchecked',safe:'check_circle',caution:'warning',danger:'error'};
+    riskBadge.querySelector('.material-symbols-outlined').textContent = iconMap[kind] || 'radio_button_unchecked';
+  }
+
+  function drawSparkline(){
+    const w = spark.width = spark.clientWidth * (window.devicePixelRatio||1);
+    const h = spark.height = spark.clientHeight * (window.devicePixelRatio||1);
+    sctx.clearRect(0,0,w,h);
+    const range = V_MAX - V_MIN;
+    const yFor = v => h - ((v - V_MIN)/range) * h;
+    // zone bands
+    sctx.fillStyle='rgba(255,92,108,0.08)'; sctx.fillRect(0, yFor(TH_DANGER), w, h - yFor(TH_DANGER));
+    sctx.fillStyle='rgba(255,180,84,0.07)'; sctx.fillRect(0, yFor(TH_CAUTION), w, yFor(TH_DANGER)-yFor(TH_CAUTION));
+    sctx.fillStyle='rgba(53,208,186,0.06)'; sctx.fillRect(0, 0, w, yFor(TH_CAUTION));
+    if (history.length < 2) return;
+    sctx.beginPath();
+    history.forEach((v,i)=>{
+      const x = (i/(HISTORY_LEN-1))*w;
+      const y = yFor(v);
+      if (i===0) sctx.moveTo(x,y); else sctx.lineTo(x,y);
+    });
+    sctx.strokeStyle = '#35D0BA'; sctx.lineWidth = 2; sctx.stroke();
+  }
+
+  /* ---------------- main callback ---------------- */
+  function onResults(results){
+    if (!running) return;
+    const w = canvas.width, h = canvas.height;
+    if (!results.poseLandmarks){ ctx.clearRect(0,0,w,h); return; }
+
+    const lm = results.poseLandmarks;
+    const g = computeCOM(lm,w,h);
+
+    drawSkeleton({raw:lm}, w, h);
+
+    // px per cm scale using calibrated leg length
+    const pxPerCm = g.legPx / Math.max(30, legLengthCm);
+    if (!isFinite(pxPerCm) || pxPerCm<=0){ return; }
+
+    const comCm = {x:g.com.x/pxPerCm, y:g.com.y/pxPerCm};
+    const now = performance.now()/1000;
+
+    let vx = 0;
+    if (prevComCm && prevT){
+      const dt = now - prevT;
+      if (dt > 0.001){
+        vx = (comCm.x - prevComCm.x)/dt;
+      }
+    }
+    smVel = smVel + SMOOTH*(vx - smVel);
+    prevComCm = comCm; prevT = now;
+
+    const omega0 = Math.sqrt(G_CM / Math.max(30,legLengthCm));
+    const xcomCmX = comCm.x + smVel/omega0;
+    const xcomPxX = xcomCmX * pxPerCm;
+
+    const bosMinCm = g.bosMin/pxPerCm, bosMaxCm = g.bosMax/pxPerCm;
+    let mos;
+    if (xcomCmX >= bosMinCm && xcomCmX <= bosMaxCm){
+      mos = Math.min(xcomCmX-bosMinCm, bosMaxCm-xcomCmX);
+    } else {
+      mos = xcomCmX < bosMinCm ? -(bosMinCm-xcomCmX) : -(xcomCmX-bosMaxCm);
+    }
+    smMoS = (smMoS===null) ? mos : smMoS + SMOOTH*(mos - smMoS);
+
+    drawMarkers(g.com, {x:xcomPxX}, g.bosMin, g.bosMax, h);
+    setNeedle(smMoS);
+
+    velOut.innerHTML = `${Math.abs(smVel).toFixed(1)}<span>cm/s</span>`;
+    xcomOut.innerHTML = `${(xcomCmX-comCm.x).toFixed(1)}<span>cm</span>`;
+    omegaOut.innerHTML = `${omega0.toFixed(2)}<span>rad/s</span>`;
+    bosOut.innerHTML = `${(bosMaxCm-bosMinCm).toFixed(1)}<span>cm</span>`;
+
+    if (smMoS < TH_DANGER) setRisk('danger','위험');
+    else if (smMoS < TH_CAUTION) setRisk('caution','주의');
+    else setRisk('safe','안정');
+
+    history.push(smMoS);
+    if (history.length > HISTORY_LEN) history.shift();
+    drawSparkline();
+  }
+
+  /* ---------------- init ---------------- */
+  window.addEventListener('resize', drawSparkline);
+  resetSession();
+  drawSparkline();
+})();
+</script>
+</body>
+</html>
