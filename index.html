@@ -74,7 +74,7 @@
   .card-title .tag{font-family:var(--font-mono);font-size:10.5px;color:var(--text-faint);letter-spacing:.06em;text-transform:uppercase;}
 
   /* video panel */
-  .video-shell{position:relative;width:100%;aspect-ratio:4/3;border-radius:12px;overflow:hidden;background:#050a14;border:1px solid var(--border-soft);}
+  .video-shell{position:relative;width:100%;aspect-ratio:3/4;border-radius:12px;overflow:hidden;background:#050a14;border:1px solid var(--border-soft);}
   .video-shell video, .video-shell canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
   .video-shell.mirrored video, .video-shell.mirrored canvas{transform:scaleX(-1);}
   .video-shell video{background:#050a14;}
@@ -424,6 +424,8 @@
   let history = [];
   const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
   let currentFacingMode = isMobile ? 'environment' : 'user';
+  let videoDevices = [];
+  let currentDeviceIndex = 0;
   let legLengthCm = parseFloat(legInput.value) || 82.5;
 
   heightInput.addEventListener('input', () => {
@@ -455,29 +457,79 @@
     requestAnimationFrame(frameLoop);
   }
 
+  async function updateDeviceList() {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      videoDevices = devices.filter(d => d.kind === 'videoinput');
+      
+      if (stream) {
+        const track = stream.getVideoTracks()[0];
+        if (track) {
+          const settings = track.getSettings();
+          const currentDeviceId = settings.deviceId;
+          if (currentDeviceId) {
+            const idx = videoDevices.findIndex(d => d.deviceId === currentDeviceId || d.label === track.label);
+            if (idx !== -1) {
+              currentDeviceIndex = idx;
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Enumerate devices failed: ', e);
+    }
+  }
+
   async function startCamera(){
     try{
       initPose();
       if (stream) {
         stream.getTracks().forEach(t => t.stop());
       }
-      stream = await navigator.mediaDevices.getUserMedia({
+      
+      const constraints = {
         video: {
-          width: { ideal: 640 },
-          height: { ideal: 480 },
-          facingMode: currentFacingMode
+          width: { ideal: 480 },
+          height: { ideal: 640 }
         },
         audio: false
-      });
-      if (currentFacingMode === 'user') {
+      };
+
+      if (videoDevices.length > 1 && videoDevices[currentDeviceIndex]) {
+        constraints.video.deviceId = { exact: videoDevices[currentDeviceIndex].deviceId };
+      } else {
+        constraints.video.facingMode = currentFacingMode;
+      }
+
+      stream = await navigator.mediaDevices.getUserMedia(constraints);
+      
+      // Dynamic mirroring detection based on track settings/label
+      let isFront = true;
+      const track = stream.getVideoTracks()[0];
+      if (track) {
+        const settings = track.getSettings();
+        if (settings.facingMode) {
+          isFront = (settings.facingMode === 'user');
+        } else {
+          const label = track.label?.toLowerCase() || '';
+          if (label.includes('back') || label.includes('rear') || label.includes('environment') || label.includes('external') || label.includes('out')) {
+            isFront = false;
+          }
+        }
+      }
+
+      if (isFront) {
         videoShell.classList.add('mirrored');
       } else {
         videoShell.classList.remove('mirrored');
       }
+
       video.srcObject = stream;
       await video.play();
-      canvas.width = video.videoWidth || 640;
-      canvas.height = video.videoHeight || 480;
+      canvas.width = video.videoWidth || 480;
+      canvas.height = video.videoHeight || 640;
+      
+      await updateDeviceList();
       
       if (!running) {
         running = true;
@@ -514,7 +566,11 @@
 
   async function switchCamera(){
     if (!running) return;
-    currentFacingMode = (currentFacingMode === 'user') ? 'environment' : 'user';
+    if (videoDevices.length > 1) {
+      currentDeviceIndex = (currentDeviceIndex + 1) % videoDevices.length;
+    } else {
+      currentFacingMode = (currentFacingMode === 'user') ? 'environment' : 'user';
+    }
     await startCamera();
   }
 
