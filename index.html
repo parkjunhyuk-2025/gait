@@ -75,7 +75,8 @@
 
   /* video panel */
   .video-shell{position:relative;width:100%;aspect-ratio:4/3;border-radius:12px;overflow:hidden;background:#050a14;border:1px solid var(--border-soft);}
-  .video-shell video, .video-shell canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1);}
+  .video-shell video, .video-shell canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
+  .video-shell.mirrored video, .video-shell.mirrored canvas{transform:scaleX(-1);}
   .video-shell video{background:#050a14;}
   .video-placeholder{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--text-faint);font-size:13px;text-align:center;padding:20px;transition:opacity .3s;}
   .video-placeholder .material-symbols-outlined{font-size:38px;opacity:.6;}
@@ -190,6 +191,7 @@
       <div class="video-controls">
         <button class="btn primary" id="btnStart"><span class="material-symbols-outlined">play_arrow</span>시작</button>
         <button class="btn stop" id="btnStop" style="display:none;"><span class="material-symbols-outlined">stop</span>정지</button>
+        <button class="btn" id="btnSwitch" style="display:none;"><span class="material-symbols-outlined">switch_camera</span>카메라 전환</button>
         <button class="btn" id="btnReset"><span class="material-symbols-outlined">restart_alt</span>초기화</button>
         <div class="calib">
           <label>신장(cm)</label>
@@ -363,6 +365,7 @@
   const videoShell = document.getElementById('videoShell');
   const btnStart = document.getElementById('btnStart');
   const btnStop = document.getElementById('btnStop');
+  const btnSwitch = document.getElementById('btnSwitch');
   const btnReset = document.getElementById('btnReset');
   const heightInput = document.getElementById('heightInput');
   const legInput = document.getElementById('legInput');
@@ -419,6 +422,8 @@
   let prevComCm = null, prevT = null;
   let smMoS = null, smVel = 0;
   let history = [];
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  let currentFacingMode = isMobile ? 'environment' : 'user';
   let legLengthCm = parseFloat(legInput.value) || 82.5;
 
   heightInput.addEventListener('input', () => {
@@ -453,19 +458,47 @@
   async function startCamera(){
     try{
       initPose();
-      stream = await navigator.mediaDevices.getUserMedia({video:{width:640,height:480,facingMode:'user'},audio:false});
+      if (stream) {
+        stream.getTracks().forEach(t => t.stop());
+      }
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+          facingMode: currentFacingMode
+        },
+        audio: false
+      });
+      if (currentFacingMode === 'user') {
+        videoShell.classList.add('mirrored');
+      } else {
+        videoShell.classList.remove('mirrored');
+      }
       video.srcObject = stream;
       await video.play();
       canvas.width = video.videoWidth || 640;
       canvas.height = video.videoHeight || 480;
-      running = true;
-      videoShell.classList.add('active');
-      btnStart.style.display='none'; btnStop.style.display='inline-flex';
-      statusPill.classList.add('live'); statusText.textContent='분석 중 · 실시간 추적';
-      requestAnimationFrame(frameLoop);
+      
+      if (!running) {
+        running = true;
+        videoShell.classList.add('active');
+        btnStart.style.display = 'none';
+        btnStop.style.display = 'inline-flex';
+        btnSwitch.style.display = 'inline-flex';
+        statusPill.classList.add('live');
+        statusText.textContent = '분석 중 · 실시간 추적';
+        requestAnimationFrame(frameLoop);
+      } else {
+        statusText.textContent = '분석 중 · 실시간 추적';
+      }
     }catch(err){
-      statusText.textContent='카메라 접근 실패: 권한을 확인하세요';
+      statusText.textContent = '카메라 접근 실패: 권한을 확인하세요';
       console.error(err);
+      running = false;
+      btnStart.style.display = 'inline-flex';
+      btnStop.style.display = 'none';
+      btnSwitch.style.display = 'none';
+      statusPill.classList.remove('live');
     }
   }
 
@@ -474,8 +507,15 @@
     if (stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
     videoShell.classList.remove('active');
     btnStart.style.display='inline-flex'; btnStop.style.display='none';
+    btnSwitch.style.display='none';
     statusPill.classList.remove('live'); statusText.textContent='대기 중 · 카메라를 시작하세요';
     ctx.clearRect(0,0,canvas.width,canvas.height);
+  }
+
+  async function switchCamera(){
+    if (!running) return;
+    currentFacingMode = (currentFacingMode === 'user') ? 'environment' : 'user';
+    await startCamera();
   }
 
   function resetSession(){
@@ -491,6 +531,7 @@
 
   btnStart.addEventListener('click', startCamera);
   btnStop.addEventListener('click', stopCamera);
+  btnSwitch.addEventListener('click', switchCamera);
   btnReset.addEventListener('click', resetSession);
 
   /* ---------------- geometry helpers ---------------- */
