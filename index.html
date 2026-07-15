@@ -418,6 +418,7 @@
   /* ---------------- state ---------------- */
   let stream = null;
   let running = false;
+  let poseActive = false;
   let pose = null;
   let prevComCm = null, prevT = null;
   let smMoS = null, smVel = 0;
@@ -453,7 +454,9 @@
 
   async function frameLoop(){
     if (!running) return;
-    try{ await pose.send({image:video}); }catch(e){ /* skip frame on transient error */ }
+    if (poseActive && video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0) {
+      try{ await pose.send({image:video}); }catch(e){ /* skip frame on transient error */ }
+    }
     requestAnimationFrame(frameLoop);
   }
 
@@ -482,6 +485,7 @@
 
   async function startCamera(){
     try{
+      poseActive = false; // Pause MediaPipe frames during transition
       initPose();
       if (stream) {
         stream.getTracks().forEach(t => t.stop());
@@ -525,12 +529,20 @@
       }
 
       video.srcObject = stream;
+      
+      // Wait for video to be ready and playing
       await video.play();
-      canvas.width = video.videoWidth || 480;
-      canvas.height = video.videoHeight || 640;
+      while (video.videoWidth === 0 || video.videoHeight === 0) {
+        await new Promise(r => setTimeout(r, 50));
+      }
+
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
       
       await updateDeviceList();
       
+      poseActive = true; // Resume MediaPipe frames now that video dimensions are valid and configured
+
       if (!running) {
         running = true;
         videoShell.classList.add('active');
@@ -547,6 +559,7 @@
       statusText.textContent = '카메라 접근 실패: 권한을 확인하세요';
       console.error(err);
       running = false;
+      poseActive = false;
       btnStart.style.display = 'inline-flex';
       btnStop.style.display = 'none';
       btnSwitch.style.display = 'none';
@@ -556,6 +569,7 @@
 
   function stopCamera(){
     running = false;
+    poseActive = false;
     if (stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
     videoShell.classList.remove('active');
     btnStart.style.display='inline-flex'; btnStop.style.display='none';
@@ -566,6 +580,7 @@
 
   async function switchCamera(){
     if (!running) return;
+    poseActive = false; // Pause active loops
     if (videoDevices.length > 1) {
       currentDeviceIndex = (currentDeviceIndex + 1) % videoDevices.length;
     } else {
