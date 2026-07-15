@@ -66,7 +66,15 @@
 
   /* ---------- dashboard grid ---------- */
   .dashboard{display:grid;grid-template-columns:1.35fr 1fr;gap:18px;align-items:start;}
-  @media (max-width:900px){.dashboard{grid-template-columns:1fr;}}
+  @media (max-width:900px){
+    .dashboard{grid-template-columns:1fr;}
+    .mobile-gauge-overlay {
+      display: flex;
+    }
+    .gauge-card {
+      display: none;
+    }
+  }
 
   .card{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:18px;}
   .card-title{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
@@ -149,6 +157,50 @@
   footer.refs .note{margin-top:14px;font-size:11.5px;color:var(--text-faint);font-style:italic;}
 
   footer.copyright{margin-top:24px;text-align:center;font-family:var(--font-mono);font-size:11.5px;letter-spacing:.04em;color:var(--teal);}
+
+  /* Mobile Overlay Gauge */
+  .mobile-gauge-overlay {
+    position: absolute;
+    bottom: 12px;
+    right: 12px;
+    background: rgba(17, 27, 46, 0.75);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--border-soft);
+    border-radius: 12px;
+    padding: 10px 10px 6px;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    pointer-events: none;
+    z-index: 10;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+    transition: border-color 0.25s, box-shadow 0.25s;
+  }
+  .overlay-mos-val {
+    font-family: var(--font-mono);
+    font-size: 16px;
+    font-weight: 700;
+    margin-top: -18px;
+    color: var(--text);
+    transition: color 0.25s;
+  }
+  .overlay-mos-val span {
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-left: 2px;
+  }
+  .video-shell:not(.active) .mobile-gauge-overlay {
+    display: none !important;
+  }
+
+  .mobile-gauge-overlay.safe { border-color: rgba(53, 208, 186, 0.4); box-shadow: 0 4px 16px rgba(53, 208, 186, 0.15); }
+  .mobile-gauge-overlay.caution { border-color: rgba(255, 180, 84, 0.4); box-shadow: 0 4px 16px rgba(255, 180, 84, 0.15); }
+  .mobile-gauge-overlay.danger { border-color: rgba(255, 92, 108, 0.5); box-shadow: 0 4px 20px rgba(255, 92, 108, 0.25); }
+
+  .mobile-gauge-overlay.safe .overlay-mos-val { color: var(--teal); }
+  .mobile-gauge-overlay.caution .overlay-mos-val { color: var(--amber); }
+  .mobile-gauge-overlay.danger .overlay-mos-val { color: var(--red); }
 </style>
 </head>
 <body>
@@ -186,6 +238,19 @@
         <div class="video-placeholder">
           <span class="material-symbols-outlined">videocam</span>
           <span>카메라를 시작하면 골격·무게중심·안정성 지표가<br>실시간으로 표시됩니다</span>
+        </div>
+        <!-- Mobile Overlay Gauge -->
+        <div class="mobile-gauge-overlay" id="mobileGaugeOverlay">
+          <svg viewBox="0 0 240 140" width="110">
+            <path d="M 20,120 A 100,100 0 0 1 70,33.40" fill="none" stroke="#FF5C6C" stroke-width="18" stroke-linecap="butt"/>
+            <path d="M 70,33.40 A 100,100 0 0 1 145.88,23.41" fill="none" stroke="#FFB454" stroke-width="18" stroke-linecap="butt"/>
+            <path d="M 145.88,23.41 A 100,100 0 0 1 220,120" fill="none" stroke="#35D0BA" stroke-width="18" stroke-linecap="butt"/>
+            <g id="needleGroupMobile" transform="rotate(0 120 120)">
+              <line x1="120" y1="120" x2="120" y2="34" stroke="#E8ECF6" stroke-width="3.5" stroke-linecap="round"/>
+            </g>
+            <circle cx="120" cy="120" r="7" fill="#E8ECF6"/>
+          </svg>
+          <div class="overlay-mos-val" id="mosValueMobile">—<span>cm</span></div>
         </div>
       </div>
       <div class="video-controls">
@@ -374,6 +439,9 @@
   const statusText = document.getElementById('statusText');
   const needleGroup = document.getElementById('needleGroup');
   const mosValue = document.getElementById('mosValue');
+  const needleGroupMobile = document.getElementById('needleGroupMobile');
+  const mosValueMobile = document.getElementById('mosValueMobile');
+  const mobileGaugeOverlay = document.getElementById('mobileGaugeOverlay');
   const riskBadge = document.getElementById('riskBadge');
   const riskText = document.getElementById('riskText');
   const velOut = document.getElementById('velOut');
@@ -592,7 +660,8 @@
   function resetSession(){
     prevComCm=null; prevT=null; smMoS=null; smVel=0; history=[];
     drawSparkline();
-    mosValue.innerHTML='—<span>cm</span>';
+    if (mosValue) mosValue.innerHTML='—<span>cm</span>';
+    if (mosValueMobile) mosValueMobile.innerHTML='—<span>cm</span>';
     velOut.innerHTML='0.0<span>cm/s</span>';
     xcomOut.innerHTML='0.0<span>cm</span>';
     bosOut.innerHTML='0.0<span>cm</span>';
@@ -673,15 +742,28 @@
   function setNeedle(value){
     const clamped = Math.max(V_MIN, Math.min(V_MAX, value));
     const angle = A_MIN + (clamped - V_MIN)/(V_MAX - V_MIN) * (A_MAX - A_MIN);
-    needleGroup.setAttribute('transform', `rotate(${angle.toFixed(1)} 120 120)`);
-    mosValue.innerHTML = `${value.toFixed(1)}<span>cm</span>`;
+    if (needleGroup) needleGroup.setAttribute('transform', `rotate(${angle.toFixed(1)} 120 120)`);
+    if (mosValue) mosValue.innerHTML = `${value.toFixed(1)}<span>cm</span>`;
+    
+    if (needleGroupMobile) needleGroupMobile.setAttribute('transform', `rotate(${angle.toFixed(1)} 120 120)`);
+    if (mosValueMobile) mosValueMobile.innerHTML = `${value.toFixed(1)}<span>cm</span>`;
   }
 
+  // riskBadge가 존재할 때만 엘리먼트 갱신 처리
   function setRisk(kind,label){
-    riskBadge.className = 'risk-badge ' + kind;
-    riskText.textContent = label;
-    const iconMap = {idle:'radio_button_unchecked',safe:'check_circle',caution:'warning',danger:'error'};
-    riskBadge.querySelector('.material-symbols-outlined').textContent = iconMap[kind] || 'radio_button_unchecked';
+    if (riskBadge) {
+      riskBadge.className = 'risk-badge ' + kind;
+      riskText.textContent = label;
+      const icon = riskBadge.querySelector('.material-symbols-outlined');
+      if (icon) {
+        const iconMap = {idle:'radio_button_unchecked',safe:'check_circle',caution:'warning',danger:'error'};
+        icon.textContent = iconMap[kind] || 'radio_button_unchecked';
+      }
+    }
+    
+    if (mobileGaugeOverlay) {
+      mobileGaugeOverlay.className = 'mobile-gauge-overlay ' + kind;
+    }
   }
 
   function drawSparkline(){
